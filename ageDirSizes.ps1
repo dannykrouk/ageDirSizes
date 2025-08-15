@@ -1,5 +1,7 @@
 # BASIC USAGE:
-# "C:\Program Files\PowerShell\7\pwsh.exe" -Command ". .\ageDirSizes.ps1; Export-EnterpriseDirectorySizesToCsv -portalUrl 'https://<machine.name.with.domain>:7443/arcgis' -user '<portal admin user>' -password '<password>' -includeUncPaths 'true'  -outputFile 'ageDirectories.csv'"
+# 1. Open the PowerShell command prompt: "C:\Program Files\PowerShell\7\pwsh.exe" 
+# 2. Load the file into the command prompt memory space: . .\ageDirSizes.ps1
+# 3. Run the command: Export-EnterpriseDirectorySizesToCsv -portalUrl https://<machine.name.with.domain>:7443/arcgis -user <portal admin user> -password <password> -includeUncPaths true  -outputFile ageDirectories.csv
 
 # REQUIREMENTS:
 # Requires PowerShell 7
@@ -32,6 +34,7 @@
 
 # Author: dkrouk@esri.com
 # Original Release Date: July 2025
+# Revision: August 2025
 
 
 $global:referer = "https://remote.dir/"
@@ -1313,6 +1316,15 @@ function Get-BytesForRemoteDirectory
 		
     )
 
+	if (Test-PowerShell7OrBetter)
+	{
+		Write-Host "✓ Running on PowerShell 7.x or better!" -ForegroundColor Green
+	}
+	else
+	{
+		throw "✗ Running on PowerShell $($PSVersionTable.PSVersion.Major).x (older than 7.0).  Please run with PowerShell 7.x or better.  Exiting." 
+	}
+
 	$observationTime = (Get-Date).ToString("yyyy/MM/dd HH:mm:ss")
 	
 	$time = Measure-Command { $bytes = Invoke-Command -ComputerName $MachineName -ScriptBlock { (Get-ChildItem -Path $using:Path -Recurse -Force | Measure-Object -Property Length -Sum).Sum } }
@@ -1454,6 +1466,15 @@ function Export-PortalDirectorySizesToCsv {
         [string]$outputFile
 		
     )
+
+	if (Test-PowerShell7OrBetter)
+	{
+		Write-Host "✓ Running on PowerShell 7.x or better!" -ForegroundColor Green
+	}
+	else
+	{
+		throw "✗ Running on PowerShell $($PSVersionTable.PSVersion.Major).x (older than 7.0).  Please run with PowerShell 7.x or better.  Exiting." 
+	}	
 	
 	# Get a token for Portal
 	$portalToken = Get-Token -Context $portalUrl -Uname $user -Pwd $password  -EsriServerType "PORTAL"
@@ -2066,6 +2087,15 @@ function Export-EnterpriseDirectorySizesToCsv {
         [string]$outputFile
     )
 	
+	if (Test-PowerShell7OrBetter)
+	{
+		Write-Host "✓ Running on PowerShell 7.x or better!" -ForegroundColor Green
+	}
+	else
+	{
+		throw "✗ Running on PowerShell $($PSVersionTable.PSVersion.Major).x (older than 7.0).  Please run with PowerShell 7.x or better.  Exiting." 
+	}
+	
 	$portalTokenValue = Export-PortalDirectorySizesToCsv -portalUrl $portalUrl -user $user -password $password -includeUncPaths $includeUncPaths  -outputFile $OutputFile 
 	
 	Write-Host "Getting Federated Sites ..."
@@ -2084,6 +2114,43 @@ function Export-EnterpriseDirectorySizesToCsv {
 }
 
 
-
-
-
+function Test-PowerShell7OrBetter {
+    <#
+    .SYNOPSIS
+        Determines whether the current PowerShell session is running PowerShell 7.x or better.
+    
+    .DESCRIPTION
+        This function checks the PowerShell version to determine if it's running on
+        PowerShell 7.0 or a newer version. It returns $true for PowerShell 7.x and above,
+        and $false for Windows PowerShell 5.x or earlier versions.
+    
+    .EXAMPLE
+        Test-PowerShell7OrBetter
+        Returns $true if running on PowerShell 7.0 or later, $false otherwise.
+    
+    .EXAMPLE
+        if (Test-PowerShell7OrBetter) {
+            Write-Host "Running on PowerShell 7.x or better!"
+        } else {
+            Write-Host "Running on an older version of PowerShell"
+        }
+    
+    .OUTPUTS
+        System.Boolean
+    #>
+    
+    [CmdletBinding()]
+    param()
+    
+    # Get the current PowerShell version
+    $psVersion = $PSVersionTable.PSVersion
+    
+    # Check if major version is 7 or greater
+    if ($psVersion.Major -ge 7) {
+        Write-Verbose "PowerShell version $($psVersion.ToString()) detected - PowerShell 7.x or better: TRUE"
+        return $true
+    } else {
+        Write-Verbose "PowerShell version $($psVersion.ToString()) detected - PowerShell 7.x or better: FALSE"
+        return $false
+    }
+}
