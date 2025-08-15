@@ -7,9 +7,9 @@ BASIC USAGE:
 3. Run the command: Export-EnterpriseDirectorySizesToCsv -portalUrl https://<machine.name.with.domain>:7443/arcgis -user <portal admin user> -password <password> -includeUncPaths true  -outputFile ageDirectories.csv
 
 REQUIREMENTS:
-Requires PowerShell 7
-PowerShell must be enabled on the remote machine (Enable-PSRemoting)
-The executing user must have local admin privileges on the target machines 
+1.  Requires PowerShell 7
+2.  PowerShell must be enabled on the remote machine (Enable-PSRemoting)
+3.  The executing user must have local admin privileges on the target machines 
 
 EXTENDED DESCRIPTION:
 The PowerShell file has a collection of functions that you can call from PowerShell to get directory size information from components within an ArcGIS Enterprise deployment.
