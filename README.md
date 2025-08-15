@@ -2,7 +2,9 @@
 Create a csv file with the size of the various "content"/data directories within an ArcGIS Enterprise deployment.
 
 BASIC USAGE:
-"C:\Program Files\PowerShell\7\pwsh.exe" -Command ". .\ageDirSizes.ps1; Export-EnterpriseDirectorySizesToCsv -portalUrl 'https://<machine.name.with.domain>:7443/arcgis' -user '<portal admin user>' -password '<password>' -includeUncPaths 'true'  -outputFile  'ageDirectories.csv'"
+1. Open the PowerShell command prompt: "C:\Program Files\PowerShell\7\pwsh.exe" 
+2. Load the file into the command prompt memory space: . .\ageDirSizes.ps1
+3. Run the command: Export-EnterpriseDirectorySizesToCsv -portalUrl https://<machine.name.with.domain>:7443/arcgis -user <portal admin user> -password <password> -includeUncPaths true  -outputFile ageDirectories.csv
 
 REQUIREMENTS:
 Requires PowerShell 7
