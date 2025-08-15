@@ -2085,20 +2085,5 @@ function Export-EnterpriseDirectorySizesToCsv {
 
 
 
-$portalUrl = "https://dannyk.esri.com/arcgis"
-$user = "portal.admin"
-$password = "portal.admin1"
-$includeUncPaths = $true 
-#$expiration = 1440
-$outputFile = "directorySizes.csv"
-
-
-Write-Host "Beginning execution ..." -ForegroundColor Green
-
-Export-EnterpriseDirectorySizesToCsv -portalUrl $portalUrl -user $user -password $password -includeUncPaths $includeUncPaths  -outputFile $OutputFile 
-
-Write-Host "Processing complete" -ForegroundColor Green
-
-exit
 
 
