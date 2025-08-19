@@ -32,14 +32,22 @@
 
 # Or, if you just wish to target an arbitrary directory on an arbitrary machine, you can use Get-BytesForRemoteDirectory and Export-CustomObjectToCsv
 
+# Please note that this script's functions rely on PowerShell/WinRM remoting.  There are a number of foundational configurations and privileges which
+# you may need to investigate if you experience errors related to "Access denied" during execution: 
+# https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_remote_troubleshooting?view=powershell-7.5
+
 # Author: dkrouk@esri.com
 # Original Release Date: July 2025
 # Revision: August 2025
 
 
+
+
+
 $global:referer = "https://remote.dir/"
 $global:fileDelimiter = ","
 $global:expiration = 1440
+$global:assumeFileShareIsWindowsVm = $false 
 
 function Get-Token {
     <# =========================================================================
@@ -299,7 +307,6 @@ function Get-PortalTokenForServer {
         }
     }
 }
-
 
 function Get-PortalFederatedServers
 {
@@ -701,8 +708,6 @@ function Get-ManagedDataStores
 		$response 
 }
 
-
-
 function Get-MachineNamesFromDataStores {
     <#
     .SYNOPSIS
@@ -1055,7 +1060,6 @@ function Get-SoftwareInstallPath {
     }
 }
 
-
 function Remove-TrailingBackslash {
     <#
     .SYNOPSIS
@@ -1113,8 +1117,6 @@ function Remove-NonPrintableCharacters {
         Write-Output $CleanedString
     }
 }
-
-
 
 function Test-Json {
     <#
@@ -1272,7 +1274,6 @@ function Test-LetteredDrivePath {
     }
 }
 
-
 function Get-BytesForRemoteDirectory
 {
     <#
@@ -1318,7 +1319,7 @@ function Get-BytesForRemoteDirectory
 
 	if (Test-PowerShell7OrBetter)
 	{
-		Write-Host "✓ Running on PowerShell 7.x or better!" -ForegroundColor Green
+		#Write-Host "✓ Running on PowerShell 7.x or better!" -ForegroundColor Green
 	}
 	else
 	{
@@ -1326,8 +1327,27 @@ function Get-BytesForRemoteDirectory
 	}
 
 	$observationTime = (Get-Date).ToString("yyyy/MM/dd HH:mm:ss")
+
+	if (Test-UNCPath -Path $Path)
+	{
+		if ($global:assumeFileShareIsWindowsVm)
+		{
+			# ask the file share server
+			$fileShareMachineName = Get-MachineNameFromUNC $Path 
+			$time = Measure-Command { $bytes = Invoke-Command -ComputerName $fileShareMachineName -ScriptBlock { (Get-ChildItem -Path $using:Path -Recurse -Force | Measure-Object -Property Length -Sum).Sum } }
+		}
+		else
+		{
+			# ask the file share client
+			$time = Measure-Command { $bytes = Invoke-Command -ComputerName $MachineName -ScriptBlock { (Get-ChildItem -Path $using:Path -Recurse -Force | Measure-Object -Property Length -Sum).Sum } }		
+		}
+	}
+	else
+	{
+		# when the path is not unc, we ask the machine about its local directory
+		$time = Measure-Command { $bytes = Invoke-Command -ComputerName $MachineName -ScriptBlock { (Get-ChildItem -Path $using:Path -Recurse -Force | Measure-Object -Property Length -Sum).Sum } }
+	}
 	
-	$time = Measure-Command { $bytes = Invoke-Command -ComputerName $MachineName -ScriptBlock { (Get-ChildItem -Path $using:Path -Recurse -Force | Measure-Object -Property Length -Sum).Sum } }
 
 	$obj = [PSCustomObject]@{
 		ObservationTime = $observationTime
@@ -1342,7 +1362,6 @@ function Get-BytesForRemoteDirectory
 	return $obj
 	
 }
-
 
 function Export-CustomObjectToCsv {
     <#
@@ -1418,7 +1437,6 @@ function Export-CustomObjectToCsv {
         
 }
 
-
 function Export-PortalDirectorySizesToCsv {
     <#
     .SYNOPSIS
@@ -1469,12 +1487,21 @@ function Export-PortalDirectorySizesToCsv {
 
 	if (Test-PowerShell7OrBetter)
 	{
-		Write-Host "✓ Running on PowerShell 7.x or better!" -ForegroundColor Green
+		#Write-Host "✓ Running on PowerShell 7.x or better!" -ForegroundColor Green
 	}
 	else
 	{
 		throw "✗ Running on PowerShell $($PSVersionTable.PSVersion.Major).x (older than 7.0).  Please run with PowerShell 7.x or better.  Exiting." 
 	}	
+	
+	if ($global:assumeFileShareIsWindowsVm)
+	{
+		Write-Host "Global parameter indicates that file shares are Windows machines ..." -ForeGroundColor Yellow
+	}
+	else
+	{
+		Write-Host "Global parameter indicates that file shares are NOT Windows machines ..." -ForeGroundColor Yellow
+	}
 	
 	# Get a token for Portal
 	$portalToken = Get-Token -Context $portalUrl -Uname $user -Pwd $password  -EsriServerType "PORTAL"
@@ -1643,12 +1670,12 @@ function Export-PortalDirectorySizesToCsv {
 		}
 		else
 		{
-			Write-Warning "Script parameters include UNC analysis but no UNC paths were found for $serveradminUrl"
+			Write-Warning "Script parameters include UNC analysis but no UNC paths were found for $portalUrl"
 		}
 	}
 	else
 	{
-		Write-Host "Script parameters exclude UNC paths from analysis for $serveradminUrl"
+		Write-Host "Script parameters exclude UNC paths from analysis for $portalUrl"
 	}
 
 	# return Portal's token value
@@ -2096,6 +2123,16 @@ function Export-EnterpriseDirectorySizesToCsv {
 		throw "✗ Running on PowerShell $($PSVersionTable.PSVersion.Major).x (older than 7.0).  Please run with PowerShell 7.x or better.  Exiting." 
 	}
 	
+	if ($global:assumeFileShareIsWindowsVm)
+	{
+		Write-Host "Global parameter indicates that file shares are Windows machines ..." -ForeGroundColor Yellow
+	}
+	else
+	{
+		Write-Host "Global parameter indicates that file shares are NOT Windows machines ..." -ForeGroundColor Yellow
+	}
+
+	
 	$portalTokenValue = Export-PortalDirectorySizesToCsv -portalUrl $portalUrl -user $user -password $password -includeUncPaths $includeUncPaths  -outputFile $OutputFile 
 	
 	Write-Host "Getting Federated Sites ..."
@@ -2110,9 +2147,10 @@ function Export-EnterpriseDirectorySizesToCsv {
 		Export-ServerDirectorySizesToCsv -serverTokenValue $serverTokenValue -serveradminUrl $adminUrl -includeUncPaths $includeUncPaths -outputFile $OutputFile 
 			
 	}
+	
+	Write-Host "Process complete" -ForeGroundColor Green
 
 }
-
 
 function Test-PowerShell7OrBetter {
     <#
@@ -2154,3 +2192,80 @@ function Test-PowerShell7OrBetter {
         return $false
     }
 }
+
+function Get-MachineNameFromUNC {
+    <#
+    .SYNOPSIS
+    Extracts the machine name from a UNC path.
+    
+    .DESCRIPTION
+    This function takes a UNC path (Universal Naming Convention) and extracts the machine/server name from it.
+    Supports both standard UNC paths (\\server\share\path) and administrative shares (\\server\c$\path).
+    
+    .PARAMETER Path
+    The UNC path from which to extract the machine name. Must be a valid UNC path starting with '\\'.
+    
+    .EXAMPLE
+    Get-MachineNameFromUNC -Path "\\SERVER01\SharedFolder\file.txt"
+    Returns: SERVER01
+    
+    .EXAMPLE
+    Get-MachineNameFromUNC -Path "\\FILESERVER\c$\Windows\System32"
+    Returns: FILESERVER
+    
+    .EXAMPLE
+    $MachineName = Get-MachineNameFromUNC -Path "\\SERVER01\share"
+    Returns: SERVER01 (stored in $MachineName)
+    
+    .EXAMPLE
+    Get-MachineNameFromUNC -Path "C:\LocalPath"
+    Throws: Path 'C:\LocalPath' is not a valid UNC path. UNC paths must start with '\\'.
+    
+    .OUTPUTS
+    System.String - The machine name extracted from the UNC path
+    #>
+    
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+    
+    process {
+        # Remove any trailing whitespace
+        $UNCPath = $Path.Trim()
+        
+        # Validate if it's actually a UNC path - throw error if not
+        if (-not $UNCPath.StartsWith("\\")) {
+            throw "Path '$UNCPath' is not a valid UNC path. UNC paths must start with '\\'."
+        }
+        
+        # Remove the leading \\
+        $PathWithoutPrefix = $UNCPath.Substring(2)
+        
+        # Check if there's actually a machine name
+        if ([string]::IsNullOrWhiteSpace($PathWithoutPrefix)) {
+            throw "Path '$UNCPath' does not contain a valid machine name."
+        }
+        
+        # Find the first backslash after the machine name
+        $FirstBackslashIndex = $PathWithoutPrefix.IndexOf('\')
+        
+        if ($FirstBackslashIndex -gt 0) {
+            # Extract machine name (everything before the first backslash)
+            $MachineName = $PathWithoutPrefix.Substring(0, $FirstBackslashIndex)
+        } else {
+            # No additional path after machine name (e.g., just "\\SERVER")
+            $MachineName = $PathWithoutPrefix
+        }
+        
+        # Validate machine name is not empty
+        if ([string]::IsNullOrWhiteSpace($MachineName)) {
+            throw "Path '$UNCPath' does not contain a valid machine name."
+        }
+        
+        # Return the machine name
+        return $MachineName
+    }
+}
+
