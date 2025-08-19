@@ -2,9 +2,10 @@
 Create a csv file with the size of the various "content"/data directories within an ArcGIS Enterprise deployment.
 
 BASIC USAGE:
-1. Open the PowerShell command prompt: "C:\Program Files\PowerShell\7\pwsh.exe" 
-2. Load the file into the command prompt memory space: . .\ageDirSizes.ps1
-3. Run the command: Export-EnterpriseDirectorySizesToCsv -portalUrl https://<machine.name.with.domain>:7443/arcgis -user <portal admin user> -password <password> -includeUncPaths true  -outputFile ageDirectories.csv
+1. Open a command window as admin, ideally as the service account user for the Enterprise components
+2. Start the PowerShell command prompt: "C:\Program Files\PowerShell\7\pwsh.exe" 
+3. Load the file into the PowerShell memory space: . .\ageDirSizes.ps1
+4. Run the command: Export-EnterpriseDirectorySizesToCsv -portalUrl https://<machine.name.with.domain>:7443/arcgis -user <portal admin user> -password <password> -includeUncPaths true  -outputFile ageDirectories.csv
 
 REQUIREMENTS:
 1.  Requires PowerShell 7
@@ -35,6 +36,10 @@ be used to get a Portal token and then exchange it for a token for the federated
 
 Or, if you just wish to target an arbitrary directory on an arbitrary machine, you can use Get-BytesForRemoteDirectory and Export-CustomObjectToCsv
 
+Please note that this script's functions rely on PowerShell/WinRM remoting.  There are a number of foundational configurations and privileges which
+you may need to investigate if you experience errors related to "Access denied" during execution: 
+https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_remote_troubleshooting?view=powershell-7.5
+
 Author: dkrouk@esri.com
 Original Release Date: July 2025
-
+Revision: August 2025
