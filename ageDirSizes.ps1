@@ -1,12 +1,13 @@
 # BASIC USAGE:
-# 1. Open the PowerShell command prompt: "C:\Program Files\PowerShell\7\pwsh.exe" 
-# 2. Load the file into the command prompt memory space: . .\ageDirSizes.ps1
-# 3. Run the command: Export-EnterpriseDirectorySizesToCsv -portalUrl https://<machine.name.with.domain>:7443/arcgis -user <portal admin user> -password <password> -includeUncPaths true  -outputFile ageDirectories.csv
+# 1. Open a command window as admin, ideally as the service account user for the Enterprise components
+# 2. Start the PowerShell command prompt: "C:\Program Files\PowerShell\7\pwsh.exe" 
+# 3. Load the file into the PowerShell memory space: . .\ageDirSizes.ps1
+# 4. Run the command: Export-EnterpriseDirectorySizesToCsv -portalUrl https://<machine.name.with.domain>:7443/arcgis -user <portal admin user> -password <password> -includeUncPaths true  -outputFile ageDirectories.csv
 
 # REQUIREMENTS:
 # Requires PowerShell 7
 # PowerShell must be enabled on the remote machine (Enable-PSRemoting)
-# The executing user must have local admin privileges on the target machines 
+# The executing user must have local admin and WinRM privileges on the target machines 
 
 # EXTENDED DESCRIPTION:
 # This file has a collection of functions that you can call from PowerShell to get directory size information from components within an ArcGIS Enterprise deployment.
@@ -1328,35 +1329,51 @@ function Get-BytesForRemoteDirectory
 
 	$observationTime = (Get-Date).ToString("yyyy/MM/dd HH:mm:ss")
 
-	if (Test-UNCPath -Path $Path)
-	{
-		if ($global:assumeFileShareIsWindowsVm)
+	try {
+	
+		if (Test-UNCPath -Path $Path)
 		{
-			# ask the file share server
-			$fileShareMachineName = Get-MachineNameFromUNC $Path 
-			$time = Measure-Command { $bytes = Invoke-Command -ComputerName $fileShareMachineName -ScriptBlock { (Get-ChildItem -Path $using:Path -Recurse -Force | Measure-Object -Property Length -Sum).Sum } }
+			if ($global:assumeFileShareIsWindowsVm)
+			{
+				# ask the file share server
+				$fileShareMachineName = Get-MachineNameFromUNC $Path 
+				$time = Measure-Command { $bytes = Invoke-Command -ComputerName $fileShareMachineName -ScriptBlock { (Get-ChildItem -Path $using:Path -Recurse -Force | Measure-Object -Property Length -Sum).Sum }  -ErrorAction Stop } -ErrorAction Stop
+			}
+			else
+			{
+				# ask the file share client
+				$time = Measure-Command { $bytes = Invoke-Command -ComputerName $MachineName -ScriptBlock { (Get-ChildItem -Path $using:Path -Recurse -Force | Measure-Object -Property Length -Sum).Sum } -ErrorAction Stop } -ErrorAction Stop
+			}
 		}
 		else
 		{
-			# ask the file share client
-			$time = Measure-Command { $bytes = Invoke-Command -ComputerName $MachineName -ScriptBlock { (Get-ChildItem -Path $using:Path -Recurse -Force | Measure-Object -Property Length -Sum).Sum } }		
+			# when the path is not unc, we ask the machine about its local directory
+			$time = Measure-Command { $bytes = Invoke-Command -ComputerName $MachineName -ScriptBlock { (Get-ChildItem -Path $using:Path -Recurse -Force | Measure-Object -Property Length -Sum).Sum } -ErrorAction Stop } -ErrorAction Stop
+		}
+		
+
+		$obj = [PSCustomObject]@{
+			ObservationTime = $observationTime
+			SiteUrl = $SiteUrl
+			Path = $Path
+			MachineName = $MachineName
+			PathNote = $pathNote
+			NumberOfBytes = $bytes
+			Message = "Size measured in " + $time.TotalMilliseconds + " ms"
 		}
 	}
-	else
+	catch
 	{
-		# when the path is not unc, we ask the machine about its local directory
-		$time = Measure-Command { $bytes = Invoke-Command -ComputerName $MachineName -ScriptBlock { (Get-ChildItem -Path $using:Path -Recurse -Force | Measure-Object -Property Length -Sum).Sum } }
-	}
 	
-
-	$obj = [PSCustomObject]@{
-		ObservationTime = $observationTime
-		SiteUrl = $SiteUrl
-		Path = $Path
-		MachineName = $MachineName
-		PathNote = $pathNote
-		NumberOfBytes = $bytes
-		Message = "Size measured in " + $time.TotalMilliseconds + " ms"
+		$obj = [PSCustomObject]@{
+			ObservationTime = $observationTime
+			SiteUrl = $SiteUrl
+			Path = $Path
+			MachineName = $MachineName
+			PathNote = "EXCEPTION"
+			NumberOfBytes = $null 
+			Message = $_.Exception.Message
+		}
 	}
 	
 	return $obj
